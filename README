@@ -1,0 +1,9 @@
+This nginx module is supposed to work with nginx reverse proxy 1.0 and enables the reverse proxy to work with HTTP 1.1 server. This is not necessary if the patch http://nginx.org/patches/patch-nginx-keepalive-full.txt is included. 
+
+This nginx module works at the reverse proxy level to dechunk the messages encoded as Transfer encoding type: chunked. 
+
+The main purpose of the module is to
+1. remove the chunk size from the data
+2. identity the EOF.
+
+Once it identifies the last chunk (has size 0 followed bt CRLF CRLF), it marks it as the last buf and indicates that this is thelast buf by setting the upstream->length = 0. The upstream module, when it sees that length=0, calls finalizerequest. 
