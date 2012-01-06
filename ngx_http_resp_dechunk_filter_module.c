@@ -143,10 +143,11 @@ ngx_http_resp_header_dechunk_filter(ngx_http_request_t *r)
     }
 
     ngx_http_set_ctx(r, ctx, ngx_http_resp_dechunk_filter_module);
+    ctx->out = NULL;
     ctx->last_out = &ctx->out;
 
 
-    /* this variable transfer_encoding has to be added to the headers_out structure of r and headers_in of u */
+//    r->chunked = 0;
     r->headers_out.transfer_encoding->value.len = 0;
     r->headers_out.transfer_encoding->value.data = (u_char *) "";
     r->headers_out.transfer_encoding->hash = 0;
@@ -263,16 +264,9 @@ parse_chunk(
                 dechunk_ctx->chunk_size = 0;
                 continue;
             } else {
-                ngx_chain_t    *cl;
-                cl = ngx_alloc_chain_link(r->pool);
-                if (cl == NULL) {
-                    return NGX_ERROR;
-                }
 
                 cl->buf = iob;
                 cl->next = NULL;
-                *dechunk_ctx->last_out = cl;
-                dechunk_ctx->last_out = &cl->next;
                 dechunk_ctx->chunk_size -= iob_len;
                 return NGX_DONE;
             }
@@ -339,12 +333,14 @@ ngx_http_dechunk_body_filter(
     ngx_buf_t *eof = NULL;
     ngx_http_dechunk_filter_ctx_t *ctx;
     ngx_chain_t *cl;
+    ngx_int_t rc;
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_resp_dechunk_filter_module);
     if (ctx == NULL || (ctx->done == 1))
     {
         return ngx_http_next_body_filter(r, in);
     }
+ //   r->chunked = 0;
 
 
     for( ; in; in = in->next) {
@@ -370,16 +366,22 @@ ngx_http_dechunk_body_filter(
              }
              eof->memory = 1;
              eof->last_buf = 1;
-             eof->pos = (u_char *) CRLF "0" CRLF CRLF;
-             eof->last = eof->pos + 7;
+             eof->pos = (u_char *) CRLF CRLF;
+             eof->last = eof->pos + 4;
          }
          cl->buf = eof;
          cl->next = NULL;
          *ctx->last_out = cl;
          ctx->last_out = &cl->next;
+         r->upstream->length = 0;
     }
 
-    return ngx_http_next_body_filter(r, ctx->out);
+    rc = ngx_http_next_body_filter(r, ctx->out);
+    ctx->out = NULL;
+    ctx->last_out = &ctx->out;
+
+    return rc;
+
 }
 
 static ngx_int_t
